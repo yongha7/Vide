@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Solo Video</title>
+<style>
+*{box-sizing:border-box}
+:root{--bg:#101114;--panel:#1c1d22;--accent:#7c83ff}
+body{margin:0;background:var(--bg);color:#fff;font-family:system-ui,sans-serif;overflow:hidden}
+button,input,textarea{font:inherit}
+button{border:0;border-radius:10px;padding:10px 13px;background:#30313a;color:#fff;cursor:pointer}
+button:active{opacity:.7}
+.primary{background:var(--accent)}
+header{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;background:#18191e}
+header strong{font-size:15px}
+#menuBtn{font-size:21px;background:transparent;padding:4px 10px}
+#main{height:calc(100dvh - 44px);display:flex;flex-direction:column}
+#info{padding:5px 12px;min-height:32px}
+#title{font-size:14px;font-weight:650}
+#desc{font-size:11px;color:#aaa;max-height:30px;overflow:hidden}
+#stage{position:relative;flex:1;min-height:0;margin:3px;background:#050506;overflow:hidden;touch-action:none}
+#frameBox{position:absolute;inset:0;transform-origin:0 0}
+#player{width:100%;height:100%;border:0;display:block}
+#interaction{position:absolute;inset:0;z-index:3;touch-action:none}
+#stage.click #interaction{pointer-events:none}
+#cropBox{display:none;position:absolute;border:2px dashed #a5aaff;background:#7c83ff20;z-index:5;pointer-events:none}
+#toolbar{display:flex;gap:5px;padding:5px 7px}
+#toolbar button{flex:1;padding:9px 2px;font-size:12px}
+#toolbar .active{background:var(--accent)}
+#cropActions{display:none;gap:6px;padding:0 7px 5px}
+#cropActions button{flex:1}
+#status{text-align:center;color:#999;font-size:11px;padding:0 5px 5px}
+.overlay{display:none;position:fixed;inset:0;z-index:20;background:#0009;align-items:flex-end;justify-content:center}
+.overlay.open{display:flex}
+.sheet{background:var(--panel);width:100%;max-width:500px;max-height:85dvh;overflow:auto;border-radius:18px 18px 0 0;padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+.sheet h2{font-size:18px;margin:0 0 12px}
+.sheet label{display:block;font-size:12px;color:#bbb;margin:12px 0 5px}
+.sheet input,.sheet textarea{width:100%;padding:11px;border-radius:9px;border:1px solid #444;background:#111216;color:#fff}
+.sheet textarea{min-height:70px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.row{display:flex;gap:7px;margin-top:10px}
+.row>*{flex:1}
+.note{font-size:12px;color:#aaa;line-height:1.5}
+#patternCanvas{width:min(260px,80vw);height:min(260px,80vw);display:block;margin:8px auto;background:#111216;border-radius:12px;touch-action:none}
+#auth{display:none;position:fixed;inset:0;z-index:100;background:var(--bg);padding:24px;align-items:center;justify-content:center}
+#auth.show{display:flex}
+#authBox{width:100%;max-width:350px;text-align:center}
+#auth input{width:100%;padding:13px;margin:8px 0;background:#222;color:white;border:1px solid #444;border-radius:10px}
+#authMsg{font-size:12px;color:#ff8888;min-height:24px}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<header>
+<strong>▶ Solo Video</strong>
+<button id="menuBtn" aria-label="메뉴">☰</button>
+</header>
+
+<main id="main">
+<section id="info">
+<div id="title">나의 영상</div>
+<div id="desc"></div>
+</section>
+
+<section id="stage" class="click">
+<div id="frameBox">
+<iframe id="player" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe>
+</div>
+<div id="interaction"></div>
+<div id="cropBox"></div>
+</section>
+
+<div id="toolbar">
+<button data-mode="click" class="active">👆 클릭</button>
+<button data-mode="zoom">🔎 확대</button>
+<button data-mode="view">👁 보기</button>
+<button data-mode="crop">▧ 자르기</button>
+</div>
+<div id="cropActions">
+<button id="applyCrop" class="primary">자르기 적용</button>
+<button id="cancelCrop">취소</button>
+</div>
+<div id="status">클릭 모드</div>
+</main>
+
+<div class="overlay" id="menu">
+<section class="sheet">
+<h2>메뉴</h2>
+<div class="grid">
+<button id="videoSettings">🎬 영상 설정</button>
+<button id="screenSettings">🖥 화면 설정</button>
+<button id="securitySettings">🔐 보안 설정</button>
+<button id="savePosition">📌 현재 위치 저장</button>
+<button id="restorePosition">↩ 위치 복원</button>
+<button id="uncrop">▧ 자르기 해제</button>
+</div>
+<div class="row"><button data-close="menu">닫기</button></div>
+</section>
+</div>
+
+<div class="overlay" id="videoDialog">
+<section class="sheet">
+<h2>영상 설정</h2>
+<label>영상 주소</label>
+<input id="urlInput" type="url">
+<label>제목</label>
+<input id="titleInput" maxlength="100">
+<label>설명</label>
+<textarea id="descInput" maxlength="1000"></textarea>
+<p class="note">사이트에서 iframe 임베드를 차단하면 영상이 표시되지 않을 수 있어.</p>
+<div class="row">
+<button data-close="videoDialog">취소</button>
+<button id="saveVideo" class="primary">저장</button>
+</div>
+</section>
+</div>
+
+<div class="overlay" id="screenDialog">
+<section class="sheet">
+<h2>화면 설정</h2>
+<label>확대 비율 <span id="scaleLabel">100%</span></label>
+<input id="scaleInput" type="range" min=".5" max="4" step=".05" value="1">
+<label>가로 위치</label>
+<input id="xInput" type="range" min="-1500" max="1500" value="0">
+<label>세로 위치</label>
+<input id="yInput" type="range" min="-1500" max="1500" value="0">
+<div class="row">
+<button id="resetTransform">초기화</button>
+<button id="saveScreen" class="primary">저장</button>
+</div>
+<div class="row"><button data-close="screenDialog">닫기</button></div>
+</section>
+</div>
+
+<div class="overlay" id="securityDialog">
+<section class="sheet">
+<h2>보안 설정</h2>
+<label>비밀번호 (비우고 저장하면 비밀번호 해제)</label>
+<input id="passwordInput" type="password" autocomplete="new-password">
+<label>패턴 인증</label>
+<button id="setPattern" class="primary" style="width:100%">패턴 설정</button>
+<div id="patternStatus" class="note" style="margin-top:8px">패턴 미설정</div>
+<div class="row">
+<button data-close="securityDialog">취소</button>
+<button id="saveSecurity" class="primary">저장</button>
+</div>
+</section>
+</div>
+
+<div class="overlay" id="patternDialog">
+<section class="sheet">
+<h2>패턴 설정</h2>
+<p class="note">점 9개 중 4개 이상을 연결하고, 같은 패턴을 한 번 더 그려.</p>
+<canvas id="patternCanvas" width="280" height="280"></canvas>
+<div id="patternMsg" class="note">첫 패턴을 그려 주세요.</div>
+<div class="row">
+<button id="clearPattern">다시 그리기</button>
+<button id="finishPattern" class="primary">확인</button>
+</div>
+<div class="row"><button data-close="patternDialog">취소</button></div>
+</section>
+</div>
+
+<div id="auth">
+<div id="authBox">
+<h2>🔐 잠금 해제</h2>
+<div id="authPasswordArea"><input id="authPassword" type="password" placeholder="비밀번호"></div>
+<div id="authPatternArea" class="hidden">
+<p>패턴을 그려 주세요.</p>
+<canvas id="authPatternCanvas" width="280" height="280" style="width:min(260px,80vw);height:min(260px,80vw);touch-action:none"></canvas>
+</div>
+<div id="authMsg"></div>
+<button id="authSubmit" class="primary" style="width:100%">확인</button>
+</div>
+</div>
+
+<script>
+(()=>{
+"use strict";
+const $=id=>document.getElementById(id);
+const KEY="solo_video_v2";
+const defaults={
+url:"https://u.pcloud.link/publink/show?code=XZaWGbJZwwaYgkqyS8XMaPMwckiMnVEnImg7",
+title:"나의 영상",desc:"",x:0,y:0,scale:1,
+savedX:0,savedY:0,savedScale:1,crop:null,
+passwordHash:"",pattern:[]
+};
+let d={...defaults};
+try{d={...d,...JSON.parse(localStorage.getItem(KEY)||"{}")}}catch(e){}
+let mode="click",cropStart=null,cropRect=null,firstPattern=null,pendingPattern=[];
+let pointers=new Map(),gesture=null,authPattern=[],authStage=0;
+
+function save(){try{localStorage.setItem(KEY,JSON.stringify(d))}catch(e){}}
+function open(id){$(id).classList.add("open")}
+function close(id){$(id).classList.remove("open")}
+document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>close(b.dataset.close));
+document.querySelectorAll(".overlay").forEach(o=>o.addEventListener("click",e=>{if(e.target===o)close(o.id)}));
+
+function validURL(s){try{let u=new URL(s.trim());return /^https?:$/.test(u.protocol)?u.href:""}catch(e){return ""}}
+function renderVideo(){
+$("title").textContent=d.title||"나의 영상";
+$("desc").textContent=d.desc||"";
+$("urlInput").value=d.url||"";
+$("titleInput").value=d.title||"";
+$("descInput").value=d.desc||"";
+let url=validURL(d.url||"");
+if(url&&$("player").src!==url)$("player").src=url;
+renderTransform();renderCrop();
+}
+function renderTransform(){
+$("frameBox").style.transform=`translate(${d.x}px,${d.y}px) scale(${d.scale})`;
+$("scaleInput").value=d.scale;
+$("scaleLabel").textContent=Math.round(d.scale*100)+"%";
+$("xInput").value=d.x;$("yInput").value=d.y;
+}
+function setMode(m){
+mode=m;
+$("stage").className=m;
+document.querySelectorAll("[data-mode]").forEach(b=>b.classList.toggle("active",b.dataset.mode===m));
+$("cropActions").style.display=m==="crop"?"flex":"none";
+$("status").textContent={
+click:"클릭 모드 · 영상 조작",
+zoom:"확대 모드 · 두 손가락 핀치, 한 손가락 드래그",
+view:"보기 모드 · 영상 조작 잠금",
+crop:"자르기 모드 · 사각형을 그린 뒤 적용을 누르세요"
+}[m];
+$("interaction").style.pointerEvents=m==="click"?"none":"auto";
+renderCrop();
+}
+document.querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
+
+$("menuBtn").onclick=()=>open("menu");
+$("videoSettings").onclick=()=>{close("menu");renderVideo();open("videoDialog")};
+$("screenSettings").onclick=()=>{close("menu");renderTransform();open("screenDialog")};
+$("securitySettings").onclick=()=>{close("menu");$("passwordInput").value="";updatePatternStatus();open("securityDialog")};
+
+$("saveVideo").onclick=()=>{
+let url=validURL($("urlInput").value);
+if(!url)return alert("올바른 http 또는 https 주소를 입력해.");
+d.url=url;d.title=$("titleInput").value.trim()||"나의 영상";d.desc=$("descInput").value.trim();
+save();renderVideo();close("videoDialog");
+};
+$("savePosition").onclick=()=>{
+d.savedX=d.x;d.savedY=d.y;d.savedScale=d.scale;save();close("menu");
+$("status").textContent="현재 위치와 확대 비율을 저장했어.";
+};
+$("restorePosition").onclick=()=>{
+d.x=d.savedX;d.y=d.savedY;d.scale=d.savedScale;save();renderTransform();close("menu");
+};
+$("resetTransform").onclick=()=>{d.x=0;d.y=0;d.scale=1;renderTransform()};
+$("saveScreen").onclick=()=>{
+d.x=+$("xInput").value;d.y=+$("yInput").value;d.scale=+$("scaleInput").value;
+save();renderTransform();close("screenDialog");
+};
+$("scaleInput").oninput=()=>{d.scale=+$("scaleInput").value;renderTransform()};
+$("xInput").oninput=()=>{d.x=+$("xInput").value;renderTransform()};
+$("yInput").oninput=()=>{d.y=+$("yInput").value;renderTransform()};
+
+const stage=$("stage"),interaction=$("interaction");
+function pos(e){let r=stage.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}
+function distance(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+function midpoint(a,b){return{x:(a.x+b.x)/2,y:(a.y+b.y)/2}}
+
+interaction.addEventListener("pointerdown",e=>{
+if(mode==="view")return;
+e.preventDefault();
+interaction.setPointerCapture(e.pointerId);
+let p=pos(e);pointers.set(e.pointerId,p);
+if(mode==="crop"){
+cropStart=p;cropRect={left:p.x,top:p.y,width:0,height:0};
+renderCrop();
+}else if(mode==="zoom"){
+if(pointers.size===1)gesture={type:"drag",start:p,x:d.x,y:d.y};
+if(pointers.size===2){
+let a=[...pointers.values()];
+gesture={type:"pinch",dist:distance(a[0],a[1]),scale:d.scale,
+mid:midpoint(a[0],a[1]),x:d.x,y:d.y};
+}
+}
+});
+
+interaction.addEventListener("pointermove",e=>{
+if(!pointers.has(e.pointerId))return;
+e.preventDefault();
+let p=pos(e);pointers.set(e.pointerId,p);
+if(mode==="crop"&&cropStart){
+cropRect={left:Math.min(cropStart.x,p.x),top:Math.min(cropStart.y,p.y),
+width:Math.abs(p.x-cropStart.x),height:Math.abs(p.y-cropStart.y)};
+renderCrop();
+}
+if(mode==="zoom"){
+let a=[...pointers.values()];
+if(a.length>=2){
+if(!gesture||gesture.type!=="pinch"){
+gesture={type:"pinch",dist:distance(a[0],a[1]),scale:d.scale,
+mid:midpoint(a[0],a[1]),x:d.x,y:d.y};
+}
+let dist=distance(a[0],a[1]),mid=midpoint(a[0],a[1]);
+d.scale=Math.max(.5,Math.min(4,gesture.scale*dist/Math.max(1,gesture.dist)));
+d.x=gesture.x+(mid.x-gesture.mid.x);
+d.y=gesture.y+(mid.y-gesture.mid.y);
+renderTransform();
+}else if(a.length===1){
+if(!gesture||gesture.type!=="drag"){
+let only=a[0];gesture={type:"drag",start:only,x:d.x,y:d.y};
+}
+d.x=gesture.x+p.x-gesture.start.x;
+d.y=gesture.y+p.y-gesture.start.y;
+renderTransform();
+}
+}
+});
+function pointerEnd(e){
+pointers.delete(e.pointerId);
+if(mode==="zoom"){
+if(pointers.size===1){
+let only=[...pointers.values()][0];
+gesture={type:"drag",start:only,x:d.x,y:d.y};
+}else if(!pointers.size){gesture=null;save()}
+}
+}
+interaction.addEventListener("pointerup",pointerEnd);
+interaction.addEventListener("pointercancel",pointerEnd);
+
+function renderCrop(){
+let b=$("cropBox");
+if(mode==="crop"&&cropRect){
+b.style.display="block";
+b.style.left=cropRect.left+"px";b.style.top=cropRect.top+"px";
+b.style.width=cropRect.width+"px";b.style.height=cropRect.height+"px";
+}else b.style.display="none";
+}
+$("applyCrop").onclick=()=>{
+if(!cropRect||cropRect.width<12||cropRect.height<12){
+alert("먼저 화면에 직사각형을 그려 줘.");return;
+}
+let r=stage.getBoundingClientRect();
+let top=Math.max(0,cropRect.top),left=Math.max(0,cropRect.left);
+let right=Math.max(0,r.width-left-cropRect.width);
+let bottom=Math.max(0,r.height-top-cropRect.height);
+stage.style.clipPath=`inset(${top}px ${right}px ${bottom}px ${left}px)`;
+d.crop={top,left,right,bottom};
+save();setMode("view");
+$("status").textContent="자르기 적용됨 · 메뉴에서 자르기 해제로 복원 가능";
+};
+$("cancelCrop").onclick=()=>{cropRect=null;setMode("click");renderCrop()};
+function applySavedCrop(){
+if(d.crop){
+let c=d.crop;
+stage.style.clipPath=`inset(${c.top}px ${c.right}px ${c.bottom}px ${c.left}px)`;
+}else stage.style.clipPath="";
+}
+$("uncrop").onclick=()=>{
+d.crop=null;cropRect=null;stage.style.clipPath="";
+save();close("menu");setMode("click");
+};
+
+async function hash(s){
+let buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));
+return [...new Uint8Array(buf)].map(x=>x.toString(16).padStart(2,"0")).join("");
+}
+function points(canvas){
+let pad=canvas.width*.18,step=(canvas.width-pad*2)/2;
+return Array.from({length:9},(_,i)=>({x:pad+(i%3)*step,y:pad+Math.floor(i/3)*step}));
+}
+function clearCanvas(c){
+let ctx=c.getContext("2d");ctx.clearRect(0,0,c.width,c.height);
+ctx.fillStyle="#111216";ctx.fillRect(0,0,c.width,c.height);
+points(c).forEach((p,i)=>{
+ctx.beginPath();ctx.arc(p.x,p.y,10,0,Math.PI*2);ctx.fillStyle="#777b91";ctx.fill();
+ctx.fillStyle="#fff";ctx.font="11px sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(i+1,p.x,p.y);
+});
+}
+function setupPattern(canvas,callback){
+let selected=[],drawing=false,ctx=canvas.getContext("2d");
+function near(p){
+let ps=points(canvas),best=-1,dist=Infinity;
+ps.forEach((q,i)=>{let z=distance(p,q);if(z<dist){dist=z;best=i}});
+return dist<canvas.width*.13?best:-1;
+}
+function redraw(){
+clearCanvas(canvas);let ps=points(canvas);
+if(selected.length){
+ctx.beginPath();selected.forEach((id,i)=>i?ctx.lineTo(ps[id].x,ps[id].y):ctx.moveTo(ps[id].x,ps[id].y));
+ctx.strokeStyle="#9298ff";ctx.lineWidth=6;ctx.lineCap="round";ctx.stroke();
+selected.forEach(id=>{ctx.beginPath();ctx.arc(ps[id].x,ps[id].y,12,0,Math.PI*2);ctx.fillStyle="#9298ff";ctx.fill()});
+}
+}
+canvas.addEventListener("pointerdown",e=>{
+e.preventDefault();drawing=true;selected=[];canvas.setPointerCapture(e.pointerId);
+let r=canvas.getBoundingClientRect(),id=near({x:(e.clientX-r.left)*canvas.width/r.width,y:(e.clientY-r.top)*canvas.height/r.height});
+if(id>=0)selected.push(id);redraw();
+});
+canvas.addEventListener("pointermove",e=>{
+if(!drawing)return;e.preventDefault();
+let r=canvas.getBoundingClientRect(),id=near({x:(e.clientX-r.left)*canvas.width/r.width,y:(e.clientY-r.top)*canvas.height/r.height});
+if(id>=0&&!selected.includes(id))selected.push(id);redraw();
+});
+function end(){if(drawing){drawing=false;callback([...selected])}}
+canvas.addEventListener("pointerup",end);canvas.addEventListener("pointercancel",end);
+}
+function updatePatternStatus(){$("patternStatus").textContent=d.pattern.length?"패턴 설정됨":"패턴 미설정"}
+$("setPattern").onclick=()=>{firstPattern=null;pendingPattern=[];clearCanvas($("patternCanvas"));$("patternMsg").textContent="첫 패턴을 그려 줘.";close("securityDialog");open("patternDialog")};
+$("clearPattern").onclick=()=>{pendingPattern=[];clearCanvas($("patternCanvas"));$("patternMsg").textContent=firstPattern?"같은 패턴을 다시 그려 줘.":"첫 패턴을 그려 줘."};
+setupPattern($("patternCanvas"),p=>{pendingPattern=p;$("patternMsg").textContent=p.length>=4?"확인을 눌러 주세요.":"4개 이상의 점을 연결해 줘."});
+setupPattern($("authPatternCanvas"),p=>{authPattern=p;$("authMsg").textContent="패턴 입력 완료. 확인을 눌러 줘."});
+$("finishPattern").onclick=()=>{
+if(pendingPattern.length<4)return alert("4개 이상의 점이 필요해.");
+if(!firstPattern){firstPattern=[...pendingPattern];pendingPattern=[];clearCanvas($("patternCanvas"));$("patternMsg").textContent="같은 패턴을 다시 그려 줘.";return}
+if(firstPattern.join(",")!==pendingPattern.join(",")){firstPattern=null;pendingPattern=[];clearCanvas($("patternCanvas"));$("patternMsg").textContent="패턴이 달라. 다시 시작해.";return}
+d.pattern=[...pendingPattern];firstPattern=null;pendingPattern=[];save();close("patternDialog");open("securityDialog");updatePatternStatus();
+};
+$("saveSecurity").onclick=async()=>{
+let p=$("passwordInput").value;
+if(p)d.passwordHash=await hash(p);
+else if(d.passwordHash){if(confirm("비밀번호를 해제할까?"))d.passwordHash="";}
+save();close("securityDialog");updatePatternStatus();beginAuth();
+};
+let authPassOK=false;
+async function beginAuth(){
+if(!d.passwordHash&&!d.pattern.length)return;
+$("auth").classList.add("show");
+authStage=d.passwordHash?0:1;authPassOK=false;authPattern=[];
+$("authPasswordArea").classList.toggle("hidden",authStage!==0);
+$("authPatternArea").classList.toggle("hidden",authStage!==1);
+$("authMsg").textContent="";
+clearCanvas($("authPatternCanvas"));
+}
+$("authSubmit").onclick=async()=>{
+if(authStage===0){
+if(await hash($("authPassword").value)!==d.passwordHash){$("authMsg").textContent="비밀번호가 틀렸어.";return}
+authPassOK=true;
+if(d.pattern.length){authStage=1;$("authPasswordArea").classList.add("hidden");$("authPatternArea").classList.remove("hidden");$("authMsg").textContent="이제 패턴을 입력해.";return}
+}else if(d.pattern.length&&authPattern.join(",")!==d.pattern.join(",")){
+$("authMsg").textContent="패턴이 일치하지 않아.";authPattern=[];clearCanvas($("authPatternCanvas"));return;
+}
+$("auth").classList.remove("show");
+};
+$("authPassword").addEventListener("keydown",e=>{if(e.key==="Enter")$("authSubmit").click()});
+
+renderVideo();applySavedCrop();clearCanvas($("patternCanvas"));clearCanvas($("authPatternCanvas"));setMode("click");beginAuth();
+})();
+</script>
+</body>
+</html>
