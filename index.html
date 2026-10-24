@@ -1,0 +1,2382 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Solo Video</title>
+
+<style>
+*{box-sizing:border-box}
+html,body{
+  margin:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:#101114;
+  color:#fff;
+  font-family:system-ui,-apple-system,sans-serif
+}
+button,input,textarea{font:inherit}
+button{
+  border:0;
+  border-radius:10px;
+  background:#303139;
+  color:#fff;
+  padding:9px 12px;
+  touch-action:manipulation
+}
+button:active{opacity:.7}
+.primary{background:#747cff}
+
+header{
+  height:42px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 8px;
+  background:#18191e;
+  border-bottom:1px solid #292a30
+}
+header b{font-size:14px}
+#menuBtn{
+  width:38px;
+  height:36px;
+  padding:0;
+  font-size:20px;
+  background:transparent
+}
+
+#main{
+  height:calc(100dvh - 42px);
+  display:flex;
+  flex-direction:column
+}
+
+#info{
+  padding:4px 10px;
+  min-height:30px;
+  max-height:52px;
+  overflow:hidden
+}
+#title{
+  font-size:14px;
+  font-weight:700
+}
+#desc{
+  color:#aaa;
+  font-size:11px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis
+}
+
+#stage{
+  position:relative;
+  flex:1;
+  min-height:0;
+  margin:3px;
+  overflow:hidden;
+  background:#000;
+  border-radius:12px;
+  touch-action:none
+}
+
+/*
+ iframe가 기본 상태에서 절대 잘리지 않도록
+ frameBox를 stage와 정확히 같은 크기로 설정하고
+ 중앙을 기준으로 확대한다.
+*/
+#frameBox{
+  position:absolute;
+  left:0;
+  top:0;
+  width:100%;
+  height:100%;
+  transform-origin:center center;
+  will-change:transform
+}
+
+#player{
+  display:block;
+  width:100%;
+  height:100%;
+  border:0;
+  background:#000
+}
+
+#interaction{
+  position:absolute;
+  inset:0;
+  z-index:5;
+  touch-action:none
+}
+
+/* 클릭 모드는 iframe으로 클릭 전달 */
+#stage.click #interaction{
+  pointer-events:none
+}
+
+/* 보기 모드에서는 iframe 조작을 막음 */
+#stage.view #interaction{
+  pointer-events:auto
+}
+
+#cropBox{
+  display:none;
+  position:absolute;
+  z-index:10;
+  border:2px dashed #9da3ff;
+  background:#747cff22;
+  pointer-events:none
+}
+
+#toolbar{
+  display:flex;
+  gap:5px;
+  padding:4px 6px
+}
+#toolbar button{
+  flex:1;
+  min-width:0;
+  padding:8px 2px;
+  font-size:11px
+}
+#toolbar button.active{
+  background:#747cff
+}
+
+#cropActions{
+  display:none;
+  gap:5px;
+  padding:0 6px 4px
+}
+#cropActions button{flex:1}
+
+#status{
+  height:18px;
+  line-height:18px;
+  text-align:center;
+  color:#999;
+  font-size:10px
+}
+
+/* ---------------- 메뉴 ---------------- */
+
+.overlay{
+  display:none;
+  position:fixed;
+  inset:0;
+  z-index:30;
+  background:#0009;
+  align-items:flex-end;
+  justify-content:center
+}
+.overlay.open{display:flex}
+
+.sheet{
+  width:100%;
+  max-width:520px;
+  max-height:86dvh;
+  overflow:auto;
+  padding:15px;
+  padding-bottom:calc(15px + env(safe-area-inset-bottom));
+  background:#1c1d22;
+  border-radius:18px 18px 0 0
+}
+
+.sheet h2{
+  margin:0 0 12px;
+  font-size:18px
+}
+
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:7px
+}
+
+.grid button{
+  min-height:50px;
+  font-size:12px
+}
+
+.row{
+  display:flex;
+  gap:7px;
+  margin-top:9px
+}
+.row>*{flex:1}
+
+label{
+  display:block;
+  margin:11px 0 5px;
+  color:#bbb;
+  font-size:12px
+}
+
+input,textarea{
+  width:100%;
+  border:1px solid #44464f;
+  border-radius:9px;
+  background:#111216;
+  color:#fff;
+  padding:10px;
+  outline:none
+}
+
+textarea{
+  min-height:70px;
+  resize:vertical
+}
+
+.note{
+  color:#999;
+  font-size:11px;
+  line-height:1.5
+}
+
+/* ---------------- 패턴 ---------------- */
+
+#patternCanvas{
+  display:block;
+  width:min(270px,80vw);
+  height:min(270px,80vw);
+  margin:8px auto;
+  border-radius:14px;
+  background:#111216;
+  touch-action:none
+}
+
+/* ---------------- 인증 ---------------- */
+
+#auth{
+  display:none;
+  position:fixed;
+  inset:0;
+  z-index:100;
+  background:#101114;
+  align-items:center;
+  justify-content:center;
+  padding:20px
+}
+
+#auth.show{display:flex}
+
+#authBox{
+  width:100%;
+  max-width:350px;
+  text-align:center
+}
+
+#authBox input{
+  margin:10px 0
+}
+
+#authPatternCanvas{
+  display:block;
+  width:min(270px,80vw);
+  height:min(270px,80vw);
+  margin:10px auto;
+  border-radius:14px;
+  background:#1c1d22;
+  touch-action:none
+}
+
+#authMsg{
+  min-height:22px;
+  color:#ff8585;
+  font-size:12px
+}
+
+.hidden{display:none!important}
+</style>
+</head>
+
+<body>
+
+<header>
+  <b>▶ Solo Video</b>
+  <button id="menuBtn">☰</button>
+</header>
+
+<main id="main">
+
+  <section id="info">
+    <div id="title">나의 영상</div>
+    <div id="desc"></div>
+  </section>
+
+  <section id="stage" class="click">
+
+    <div id="frameBox">
+      <iframe
+        id="player"
+        allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+        allowfullscreen
+        referrerpolicy="strict-origin-when-cross-origin">
+      </iframe>
+    </div>
+
+    <div id="interaction"></div>
+    <div id="cropBox"></div>
+
+  </section>
+
+  <div id="toolbar">
+    <button data-mode="click" class="active">👆 클릭</button>
+    <button data-mode="zoom">🔎 확대</button>
+    <button data-mode="view">👁 보기</button>
+    <button data-mode="crop">▧ 자르기</button>
+  </div>
+
+  <div id="cropActions">
+    <button id="applyCrop" class="primary">자르기 적용</button>
+    <button id="cancelCrop">취소</button>
+  </div>
+
+  <div id="status">클릭 모드</div>
+
+</main>
+
+
+<!-- 메뉴 -->
+
+<div class="overlay" id="menu">
+  <section class="sheet">
+
+    <h2>메뉴</h2>
+
+    <div class="grid">
+      <button id="videoSettings">🎬 영상 설정</button>
+      <button id="screenSettings">🖥 화면 설정</button>
+      <button id="securitySettings">🔐 보안</button>
+      <button id="savePosition">📌 현재 위치 저장</button>
+      <button id="restorePosition">↩ 위치 복원</button>
+      <button id="uncrop">▧ 자르기 해제</button>
+    </div>
+
+    <div class="row">
+      <button data-close="menu">닫기</button>
+    </div>
+
+  </section>
+</div>
+
+
+<!-- 영상 설정 -->
+
+<div class="overlay" id="videoDialog">
+  <section class="sheet">
+
+    <h2>영상 설정</h2>
+
+    <label>영상 주소</label>
+    <input id="urlInput" type="url">
+
+    <label>영상 제목</label>
+    <input id="titleInput" maxlength="100">
+
+    <label>영상 설명</label>
+    <textarea id="descInput" maxlength="1000"></textarea>
+
+    <p class="note">
+      현재 영상은 pCloud 주소를 기본값으로 사용합니다.
+      사이트에서 iframe 임베드를 차단하는 경우 모바일 브라우저에서 표시되지 않을 수 있습니다.
+    </p>
+
+    <div class="row">
+      <button data-close="videoDialog">취소</button>
+      <button id="saveVideo" class="primary">저장</button>
+    </div>
+
+  </section>
+</div>
+
+
+<!-- 화면 설정 -->
+
+<div class="overlay" id="screenDialog">
+  <section class="sheet">
+
+    <h2>화면 설정</h2>
+
+    <label>
+      확대 비율
+      <span id="scaleLabel">100%</span>
+    </label>
+
+    <input
+      id="scaleInput"
+      type="range"
+      min=".5"
+      max="4"
+      step=".05"
+      value="1">
+
+    <label>가로 위치</label>
+    <input id="xInput" type="range" min="-1500" max="1500" value="0">
+
+    <label>세로 위치</label>
+    <input id="yInput" type="range" min="-1500" max="1500" value="0">
+
+    <div class="row">
+      <button id="resetTransform">초기화</button>
+      <button id="saveScreen" class="primary">저장</button>
+    </div>
+
+    <div class="row">
+      <button data-close="screenDialog">닫기</button>
+    </div>
+
+  </section>
+</div>
+
+
+<!-- 보안 설정 -->
+
+<div class="overlay" id="securityDialog">
+  <section class="sheet">
+
+    <h2>2단계 인증</h2>
+
+    <p class="note">
+      비밀번호와 패턴을 모두 설정하면 비밀번호 → 패턴 순서로 인증합니다.
+    </p>
+
+    <label>비밀번호</label>
+    <input
+      id="passwordInput"
+      type="password"
+      autocomplete="new-password"
+      placeholder="비우고 저장하면 비밀번호 해제">
+
+    <label>패턴</label>
+
+    <button
+      id="setPattern"
+      class="primary"
+      style="width:100%">
+      패턴 설정
+    </button>
+
+    <div id="patternStatus" class="note" style="margin-top:7px">
+      패턴 미설정
+    </div>
+
+    <div class="row">
+      <button data-close="securityDialog">취소</button>
+      <button id="saveSecurity" class="primary">저장</button>
+    </div>
+
+  </section>
+</div>
+
+
+<!-- 패턴 설정 -->
+
+<div class="overlay" id="patternDialog">
+  <section class="sheet">
+
+    <h2>패턴 설정</h2>
+
+    <p class="note">
+      점 9개 중 4개 이상을 순서대로 연결하세요.
+    </p>
+
+    <canvas id="patternCanvas" width="280" height="280"></canvas>
+
+    <div id="patternMsg" class="note" style="text-align:center">
+      첫 패턴을 그려 주세요.
+    </div>
+
+    <div class="row">
+      <button id="clearPattern">다시 그리기</button>
+      <button id="finishPattern" class="primary">확인</button>
+    </div>
+
+    <div class="row">
+      <button data-close="patternDialog">취소</button>
+    </div>
+
+  </section>
+</div>
+
+
+<!-- 잠금 화면 -->
+
+<div id="auth">
+
+  <div id="authBox">
+
+    <h2>🔐 잠금 해제</h2>
+
+    <p class="note">
+      설정한 인증을 순서대로 입력하세요.
+    </p>
+
+    <div id="authPasswordArea">
+      <input
+        id="authPassword"
+        type="password"
+        autocomplete="current-password"
+        placeholder="비밀번호">
+    </div>
+
+    <div id="authPatternArea" class="hidden">
+
+      <p>패턴을 그려 주세요.</p>
+
+      <canvas
+        id="authPatternCanvas"
+        width="280"
+        height="280">
+      </canvas>
+
+    </div>
+
+    <div id="authMsg"></div>
+
+    <button
+      id="authSubmit"
+      class="primary"
+      style="width:100%">
+      확인
+    </button>
+
+  </div>
+
+</div>
+
+
+<script>
+(() => {
+
+"use strict";
+
+
+/* =========================
+   저장 데이터
+========================= */
+
+const KEY = "solo_video_v3";
+
+const defaults = {
+
+  url:
+  "https://u.pcloud.link/publink/show?code=XZaWGbJZwwaYgkqyS8XMaPMwckiMnVEnImg7",
+
+  title:"나의 영상",
+
+  desc:"",
+
+  x:0,
+  y:0,
+  scale:1,
+
+  savedX:0,
+  savedY:0,
+  savedScale:1,
+
+  crop:null,
+
+  passwordHash:"",
+
+  pattern:[]
+
+};
+
+let data = {...defaults};
+
+try{
+
+  const saved =
+    JSON.parse(localStorage.getItem(KEY) || "{}");
+
+  data = {...defaults,...saved};
+
+}catch(e){}
+
+
+/* =========================
+   변수
+========================= */
+
+let mode = "click";
+
+let pointers = new Map();
+
+let gesture = null;
+
+let cropStart = null;
+
+let cropRect = null;
+
+let firstPattern = null;
+
+let pendingPattern = [];
+
+let authPattern = [];
+
+let authStage = 0;
+
+
+/* =========================
+   DOM
+========================= */
+
+const $ = id => document.getElementById(id);
+
+const stage = $("stage");
+
+const interaction = $("interaction");
+
+const frameBox = $("frameBox");
+
+
+/* =========================
+   저장
+========================= */
+
+function save(){
+
+  try{
+
+    localStorage.setItem(
+      KEY,
+      JSON.stringify(data)
+    );
+
+  }catch(e){
+
+    alert("브라우저 저장에 실패했습니다.");
+
+  }
+
+}
+
+
+/* =========================
+   창
+========================= */
+
+function open(id){
+  $(id).classList.add("open");
+}
+
+function close(id){
+  $(id).classList.remove("open");
+}
+
+document
+.querySelectorAll("[data-close]")
+.forEach(btn=>{
+
+  btn.addEventListener(
+    "click",
+    ()=>close(btn.dataset.close)
+  );
+
+});
+
+document
+.querySelectorAll(".overlay")
+.forEach(o=>{
+
+  o.addEventListener("click",e=>{
+
+    if(e.target === o){
+      close(o.id);
+    }
+
+  });
+
+});
+
+
+/* =========================
+   URL
+========================= */
+
+function validURL(value){
+
+  try{
+
+    const u = new URL(value.trim());
+
+    if(
+      u.protocol !== "http:" &&
+      u.protocol !== "https:"
+    ){
+      return "";
+    }
+
+    return u.href;
+
+  }catch(e){
+
+    return "";
+
+  }
+
+}
+
+
+/* =========================
+   영상 표시
+========================= */
+
+function renderVideo(){
+
+  $("title").textContent =
+    data.title || "나의 영상";
+
+  $("desc").textContent =
+    data.desc || "";
+
+  $("urlInput").value =
+    data.url || "";
+
+  $("titleInput").value =
+    data.title || "";
+
+  $("descInput").value =
+    data.desc || "";
+
+  const url =
+    validURL(data.url || "");
+
+  if(
+    url &&
+    $("player").src !== url
+  ){
+
+    $("player").src = url;
+
+  }
+
+  renderTransform();
+
+  applyCrop();
+
+}
+
+
+/* =========================
+   변환
+========================= */
+
+function renderTransform(){
+
+  /*
+   중요:
+   중앙을 기준으로 확대한다.
+   따라서 scale=1일 때
+   iframe 좌우가 잘리지 않는다.
+  */
+
+  frameBox.style.transform =
+    `translate(${data.x}px,${data.y}px) scale(${data.scale})`;
+
+  $("scaleInput").value =
+    data.scale;
+
+  $("scaleLabel").textContent =
+    Math.round(data.scale*100)+"%";
+
+  $("xInput").value =
+    data.x;
+
+  $("yInput").value =
+    data.y;
+
+}
+
+
+/* =========================
+   모드
+========================= */
+
+function setMode(next){
+
+  mode = next;
+
+  stage.className = next;
+
+  document
+  .querySelectorAll("[data-mode]")
+  .forEach(btn=>{
+
+    btn.classList.toggle(
+      "active",
+      btn.dataset.mode === next
+    );
+
+  });
+
+  $("cropActions").style.display =
+    next === "crop" ? "flex" : "none";
+
+  const text = {
+
+    click:
+    "클릭 모드 · 영상 조작",
+
+    zoom:
+    "확대 모드 · 드래그 이동 / 핀치 확대",
+
+    view:
+    "보기 모드 · 영상 조작 잠금",
+
+    crop:
+    "자르기 모드 · 사각형을 그린 뒤 적용"
+
+  };
+
+  $("status").textContent =
+    text[next];
+
+  interaction.style.pointerEvents =
+    next === "click" ? "none" : "auto";
+
+  if(next !== "crop"){
+    cropRect = null;
+  }
+
+  renderCrop();
+
+}
+
+
+document
+.querySelectorAll("[data-mode]")
+.forEach(btn=>{
+
+  btn.addEventListener(
+    "click",
+    ()=>setMode(btn.dataset.mode)
+  );
+
+});
+
+
+/* =========================
+   메뉴
+========================= */
+
+$("menuBtn").onclick =
+  ()=>open("menu");
+
+
+$("videoSettings").onclick = () => {
+
+  close("menu");
+
+  renderVideo();
+
+  open("videoDialog");
+
+};
+
+
+$("screenSettings").onclick = () => {
+
+  close("menu");
+
+  renderTransform();
+
+  open("screenDialog");
+
+};
+
+
+$("securitySettings").onclick = () => {
+
+  close("menu");
+
+  $("passwordInput").value = "";
+
+  updatePatternStatus();
+
+  open("securityDialog");
+
+};
+
+
+/* =========================
+   영상 저장
+========================= */
+
+$("saveVideo").onclick = () => {
+
+  const url =
+    validURL($("urlInput").value);
+
+  if(!url){
+
+    alert(
+      "올바른 http 또는 https 주소를 입력하세요."
+    );
+
+    return;
+
+  }
+
+  data.url = url;
+
+  data.title =
+    $("titleInput").value.trim()
+    || "나의 영상";
+
+  data.desc =
+    $("descInput").value.trim();
+
+  save();
+
+  renderVideo();
+
+  close("videoDialog");
+
+};
+
+
+/* =========================
+   위치 저장
+========================= */
+
+$("savePosition").onclick = () => {
+
+  data.savedX = data.x;
+
+  data.savedY = data.y;
+
+  data.savedScale =
+    data.scale;
+
+  save();
+
+  close("menu");
+
+  $("status").textContent =
+    "현재 위치와 확대 비율을 저장했습니다.";
+
+};
+
+
+$("restorePosition").onclick = () => {
+
+  data.x = data.savedX;
+
+  data.y = data.savedY;
+
+  data.scale =
+    data.savedScale;
+
+  save();
+
+  renderTransform();
+
+  close("menu");
+
+};
+
+
+/* =========================
+   화면 설정
+========================= */
+
+$("resetTransform").onclick = () => {
+
+  data.x = 0;
+
+  data.y = 0;
+
+  data.scale = 1;
+
+  renderTransform();
+
+};
+
+
+$("scaleInput").oninput = () => {
+
+  data.scale =
+    Number($("scaleInput").value);
+
+  renderTransform();
+
+};
+
+
+$("xInput").oninput = () => {
+
+  data.x =
+    Number($("xInput").value);
+
+  renderTransform();
+
+};
+
+
+$("yInput").oninput = () => {
+
+  data.y =
+    Number($("yInput").value);
+
+  renderTransform();
+
+};
+
+
+$("saveScreen").onclick = () => {
+
+  data.x =
+    Number($("xInput").value);
+
+  data.y =
+    Number($("yInput").value);
+
+  data.scale =
+    Number($("scaleInput").value);
+
+  save();
+
+  renderTransform();
+
+  close("screenDialog");
+
+};
+
+
+/* =========================
+   확대 모드
+========================= */
+
+function getPos(e){
+
+  const r =
+    stage.getBoundingClientRect();
+
+  return {
+
+    x:e.clientX-r.left,
+
+    y:e.clientY-r.top
+
+  };
+
+}
+
+
+function distance(a,b){
+
+  return Math.hypot(
+    a.x-b.x,
+    a.y-b.y
+  );
+
+}
+
+
+function midpoint(a,b){
+
+  return {
+
+    x:(a.x+b.x)/2,
+
+    y:(a.y+b.y)/2
+
+  };
+
+}
+
+
+/*
+  확대 모드:
+
+  1손가락 = 이동
+  2손가락 = 핀치 확대/축소
+
+  iframe 자체의 크기는 변경하지 않고
+  frameBox만 transform한다.
+*/
+
+interaction.addEventListener(
+"pointerdown",
+e=>{
+
+  if(mode === "view") return;
+
+  e.preventDefault();
+
+  interaction.setPointerCapture(
+    e.pointerId
+  );
+
+  const p = getPos(e);
+
+  pointers.set(
+    e.pointerId,
+    p
+  );
+
+
+  /* ---------- 크롭 ---------- */
+
+  if(mode === "crop"){
+
+    cropStart = p;
+
+    cropRect = {
+
+      left:p.x,
+
+      top:p.y,
+
+      width:0,
+
+      height:0
+
+    };
+
+    renderCrop();
+
+    return;
+
+  }
+
+
+  /* ---------- 확대 ---------- */
+
+  if(mode === "zoom"){
+
+    const arr =
+      [...pointers.values()];
+
+
+    if(arr.length === 1){
+
+      gesture = {
+
+        type:"drag",
+
+        start:arr[0],
+
+        x:data.x,
+
+        y:data.y
+
+      };
+
+    }
+
+
+    if(arr.length === 2){
+
+      gesture = {
+
+        type:"pinch",
+
+        distance:
+          distance(arr[0],arr[1]),
+
+        scale:data.scale,
+
+        x:data.x,
+
+        y:data.y,
+
+        midpoint:
+          midpoint(arr[0],arr[1])
+
+      };
+
+    }
+
+  }
+
+});
+
+
+interaction.addEventListener(
+"pointermove",
+e=>{
+
+  if(!pointers.has(e.pointerId))
+    return;
+
+  e.preventDefault();
+
+  const p = getPos(e);
+
+  pointers.set(
+    e.pointerId,
+    p
+  );
+
+
+  /* ---------- 크롭 ---------- */
+
+  if(
+    mode === "crop" &&
+    cropStart
+  ){
+
+    cropRect = {
+
+      left:
+        Math.min(
+          cropStart.x,
+          p.x
+        ),
+
+      top:
+        Math.min(
+          cropStart.y,
+          p.y
+        ),
+
+      width:
+        Math.abs(
+          p.x-cropStart.x
+        ),
+
+      height:
+        Math.abs(
+          p.y-cropStart.y
+        )
+
+    };
+
+    renderCrop();
+
+    return;
+
+  }
+
+
+  /* ---------- 확대 ---------- */
+
+  if(mode === "zoom"){
+
+    const arr =
+      [...pointers.values()];
+
+
+    /* 두 손가락 */
+
+    if(arr.length >= 2){
+
+      if(
+        !gesture ||
+        gesture.type !== "pinch"
+      ){
+
+        gesture = {
+
+          type:"pinch",
+
+          distance:
+            distance(
+              arr[0],
+              arr[1]
+            ),
+
+          scale:data.scale,
+
+          x:data.x,
+
+          y:data.y,
+
+          midpoint:
+            midpoint(
+              arr[0],
+              arr[1]
+            )
+
+        };
+
+      }
+
+
+      const newDistance =
+        distance(
+          arr[0],
+          arr[1]
+        );
+
+      const newMid =
+        midpoint(
+          arr[0],
+          arr[1]
+        );
+
+
+      let newScale =
+        gesture.scale *
+        (
+          newDistance /
+          Math.max(
+            1,
+            gesture.distance
+          )
+        );
+
+
+      newScale =
+        Math.max(
+          .5,
+          Math.min(
+            4,
+            newScale
+          )
+        );
+
+
+      /*
+       핀치 중심을 최대한 유지하면서
+       확대한다.
+      */
+
+      const ratio =
+        newScale /
+        gesture.scale;
+
+
+      data.x =
+        newMid.x -
+        (
+          gesture.midpoint.x -
+          gesture.x
+        ) * ratio -
+        (
+          stage.clientWidth *
+          ratio -
+          stage.clientWidth
+        ) / 2;
+
+      data.y =
+        newMid.y -
+        (
+          gesture.midpoint.y -
+          gesture.y
+        ) * ratio -
+        (
+          stage.clientHeight *
+          ratio -
+          stage.clientHeight
+        ) / 2;
+
+
+      /*
+       위 계산은 중앙 기준 transform과
+       이동값을 맞추기 위한 보정.
+      */
+
+      data.scale =
+        newScale;
+
+      renderTransform();
+
+      return;
+
+    }
+
+
+    /* 한 손가락 이동 */
+
+    if(arr.length === 1){
+
+      if(
+        !gesture ||
+        gesture.type !== "drag"
+      ){
+
+        gesture = {
+
+          type:"drag",
+
+          start:arr[0],
+
+          x:data.x,
+
+          y:data.y
+
+        };
+
+      }
+
+
+      data.x =
+        gesture.x +
+        p.x -
+        gesture.start.x;
+
+      data.y =
+        gesture.y +
+        p.y -
+        gesture.start.y;
+
+      renderTransform();
+
+    }
+
+  }
+
+});
+
+
+function pointerEnd(e){
+
+  pointers.delete(
+    e.pointerId
+  );
+
+
+  if(mode === "zoom"){
+
+    if(pointers.size === 1){
+
+      const remain =
+        [...pointers.values()][0];
+
+      gesture = {
+
+        type:"drag",
+
+        start:remain,
+
+        x:data.x,
+
+        y:data.y
+
+      };
+
+    }
+
+    if(pointers.size === 0){
+
+      gesture = null;
+
+      save();
+
+    }
+
+  }
+
+
+  if(mode === "crop"){
+
+    if(
+      cropRect &&
+      cropRect.width > 10 &&
+      cropRect.height > 10
+    ){
+
+      $("status").textContent =
+        "영역 지정 완료 · 자르기 적용을 누르세요.";
+
+    }
+
+    cropStart = null;
+
+  }
+
+}
+
+
+interaction.addEventListener(
+"pointerup",
+pointerEnd
+);
+
+interaction.addEventListener(
+"pointercancel",
+pointerEnd
+);
+
+
+/* =========================
+   크롭
+========================= */
+
+function renderCrop(){
+
+  const box =
+    $("cropBox");
+
+  if(
+    mode !== "crop" ||
+    !cropRect
+  ){
+
+    box.style.display =
+      "none";
+
+    return;
+
+  }
+
+  box.style.display =
+    "block";
+
+  box.style.left =
+    cropRect.left+"px";
+
+  box.style.top =
+    cropRect.top+"px";
+
+  box.style.width =
+    cropRect.width+"px";
+
+  box.style.height =
+    cropRect.height+"px";
+
+}
+
+
+/*
+  크롭은 실제 영상 파일을 수정하는 것이 아니라
+  앱에서 보이는 영역을 잘라낸다.
+*/
+
+$("applyCrop").onclick = () => {
+
+  if(
+    !cropRect ||
+    cropRect.width < 10 ||
+    cropRect.height < 10
+  ){
+
+    alert(
+      "먼저 직사각형 영역을 그려주세요."
+    );
+
+    return;
+
+  }
+
+
+  const w =
+    stage.clientWidth;
+
+  const h =
+    stage.clientHeight;
+
+
+  const left =
+    Math.max(
+      0,
+      cropRect.left
+    );
+
+  const top =
+    Math.max(
+      0,
+      cropRect.top
+    );
+
+  const right =
+    Math.max(
+      0,
+      w -
+      cropRect.left -
+      cropRect.width
+    );
+
+  const bottom =
+    Math.max(
+      0,
+      h -
+      cropRect.top -
+      cropRect.height
+    );
+
+
+  data.crop = {
+
+    left,
+
+    top,
+
+    right,
+
+    bottom
+
+  };
+
+
+  save();
+
+  applyCrop();
+
+  cropRect = null;
+
+  setMode("view");
+
+  $("status").textContent =
+    "자르기 적용됨";
+
+};
+
+
+$("cancelCrop").onclick = () => {
+
+  cropRect = null;
+
+  setMode("click");
+
+};
+
+
+function applyCrop(){
+
+  if(!data.crop){
+
+    stage.style.clipPath =
+      "none";
+
+    return;
+
+  }
+
+  const c =
+    data.crop;
+
+  stage.style.clipPath =
+    `inset(
+      ${c.top}px
+      ${c.right}px
+      ${c.bottom}px
+      ${c.left}px
+    )`;
+
+}
+
+
+$("uncrop").onclick = () => {
+
+  data.crop = null;
+
+  cropRect = null;
+
+  stage.style.clipPath =
+    "none";
+
+  save();
+
+  close("menu");
+
+  setMode("click");
+
+};
+
+
+/* =========================
+   비밀번호
+========================= */
+
+async function hashPassword(value){
+
+  const bytes =
+    new TextEncoder()
+    .encode(value);
+
+  const buffer =
+    await crypto.subtle.digest(
+      "SHA-256",
+      bytes
+    );
+
+  return Array
+    .from(new Uint8Array(buffer))
+    .map(
+      b=>b
+      .toString(16)
+      .padStart(2,"0")
+    )
+    .join("");
+
+}
+
+
+/* =========================
+   패턴
+========================= */
+
+function patternPoints(canvas){
+
+  const pad =
+    canvas.width*.18;
+
+  const step =
+    (canvas.width-pad*2)/2;
+
+  return Array.from(
+    {length:9},
+    (_,i)=>({
+
+      x:
+        pad+
+        (i%3)*step,
+
+      y:
+        pad+
+        Math.floor(i/3)*step
+
+    })
+  );
+
+}
+
+
+function clearCanvas(canvas){
+
+  const ctx =
+    canvas.getContext("2d");
+
+  ctx.clearRect(
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
+  ctx.fillStyle =
+    "#111216";
+
+  ctx.fillRect(
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
+
+  patternPoints(canvas)
+  .forEach((p,i)=>{
+
+    ctx.beginPath();
+
+    ctx.arc(
+      p.x,
+      p.y,
+      10,
+      0,
+      Math.PI*2
+    );
+
+    ctx.fillStyle =
+      "#777b91";
+
+    ctx.fill();
+
+    ctx.fillStyle =
+      "#fff";
+
+    ctx.font =
+      "11px sans-serif";
+
+    ctx.textAlign =
+      "center";
+
+    ctx.textBaseline =
+      "middle";
+
+    ctx.fillText(
+      i+1,
+      p.x,
+      p.y
+    );
+
+  });
+
+}
+
+
+function setupPattern(
+  canvas,
+  callback
+){
+
+  let selected=[];
+
+  let drawing=false;
+
+  const ctx =
+    canvas.getContext("2d");
+
+
+  function getPosition(e){
+
+    const r =
+      canvas.getBoundingClientRect();
+
+    return {
+
+      x:
+        (e.clientX-r.left) *
+        canvas.width/r.width,
+
+      y:
+        (e.clientY-r.top) *
+        canvas.height/r.height
+
+    };
+
+  }
+
+
+  function nearest(p){
+
+    const pts =
+      patternPoints(canvas);
+
+    let best=-1;
+
+    let min=Infinity;
+
+
+    pts.forEach((q,i)=>{
+
+      const d =
+        Math.hypot(
+          p.x-q.x,
+          p.y-q.y
+        );
+
+      if(d<min){
+
+        min=d;
+
+        best=i;
+
+      }
+
+    });
+
+
+    return min <
+      canvas.width*.13
+      ? best
+      : -1;
+
+  }
+
+
+  function redraw(){
+
+    clearCanvas(canvas);
+
+    const pts =
+      patternPoints(canvas);
+
+
+    if(!selected.length)
+      return;
+
+
+    ctx.beginPath();
+
+
+    selected.forEach(
+      (id,i)=>{
+
+        const p =
+          pts[id];
+
+        if(i===0)
+          ctx.moveTo(
+            p.x,
+            p.y
+          );
+        else
+          ctx.lineTo(
+            p.x,
+            p.y
+          );
+
+      }
+    );
+
+
+    ctx.strokeStyle =
+      "#9298ff";
+
+    ctx.lineWidth=6;
+
+    ctx.lineCap="round";
+
+    ctx.stroke();
+
+
+    selected.forEach(id=>{
+
+      const p =
+        pts[id];
+
+      ctx.beginPath();
+
+      ctx.arc(
+        p.x,
+        p.y,
+        12,
+        0,
+        Math.PI*2
+      );
+
+      ctx.fillStyle =
+        "#9298ff";
+
+      ctx.fill();
+
+    });
+
+  }
+
+
+  canvas.addEventListener(
+    "pointerdown",
+    e=>{
+
+      e.preventDefault();
+
+      drawing=true;
+
+      selected=[];
+
+      canvas.setPointerCapture(
+        e.pointerId
+      );
+
+      const id =
+        nearest(
+          getPosition(e)
+        );
+
+      if(id>=0)
+        selected.push(id);
+
+      redraw();
+
+    }
+  );
+
+
+  canvas.addEventListener(
+    "pointermove",
+    e=>{
+
+      if(!drawing)
+        return;
+
+      e.preventDefault();
+
+      const id =
+        nearest(
+          getPosition(e)
+        );
+
+      if(
+        id>=0 &&
+        !selected.includes(id)
+      ){
+
+        selected.push(id);
+
+      }
+
+      redraw();
+
+    }
+  );
+
+
+  function end(){
+
+    if(!drawing)
+      return;
+
+    drawing=false;
+
+    callback(
+      [...selected]
+    );
+
+  }
+
+
+  canvas.addEventListener(
+    "pointerup",
+    end
+  );
+
+  canvas.addEventListener(
+    "pointercancel",
+    end
+  );
+
+}
+
+
+function updatePatternStatus(){
+
+  $("patternStatus")
+  .textContent =
+    data.pattern.length
+    ? "패턴 설정됨"
+    : "패턴 미설정";
+
+}
+
+
+$("setPattern").onclick = () => {
+
+  firstPattern=null;
+
+  pendingPattern=[];
+
+  clearCanvas(
+    $("patternCanvas")
+  );
+
+  $("patternMsg").textContent =
+    "첫 패턴을 그려 주세요.";
+
+  close("securityDialog");
+
+  open("patternDialog");
+
+};
+
+
+$("clearPattern").onclick = () => {
+
+  pendingPattern=[];
+
+  clearCanvas(
+    $("patternCanvas")
+  );
+
+  $("patternMsg").textContent =
+    firstPattern
+    ? "같은 패턴을 다시 그려 주세요."
+    : "첫 패턴을 그려 주세요.";
+
+};
+
+
+setupPattern(
+  $("patternCanvas"),
+  pattern=>{
+
+    pendingPattern=pattern;
+
+    $("patternMsg").textContent =
+      pattern.length>=4
+      ? "확인을 눌러 주세요."
+      : "4개 이상의 점을 연결해 주세요.";
+
+  }
+);
+
+
+$("finishPattern").onclick = () => {
+
+  if(
+    pendingPattern.length<4
+  ){
+
+    alert(
+      "4개 이상의 점이 필요합니다."
+    );
+
+    return;
+
+  }
+
+
+  if(!firstPattern){
+
+    firstPattern =
+      [...pendingPattern];
+
+    pendingPattern=[];
+
+    clearCanvas(
+      $("patternCanvas")
+    );
+
+    $("patternMsg").textContent =
+      "같은 패턴을 한 번 더 그려 주세요.";
+
+    return;
+
+  }
+
+
+  if(
+    firstPattern.join(",") !==
+    pendingPattern.join(",")
+  ){
+
+    firstPattern=null;
+
+    pendingPattern=[];
+
+    clearCanvas(
+      $("patternCanvas")
+    );
+
+    $("patternMsg").textContent =
+      "패턴이 다릅니다. 다시 설정하세요.";
+
+    return;
+
+  }
+
+
+  data.pattern =
+    [...pendingPattern];
+
+  firstPattern=null;
+
+  pendingPattern=[];
+
+  save();
+
+  close("patternDialog");
+
+  open("securityDialog");
+
+  updatePatternStatus();
+
+};
+
+
+/* =========================
+   인증
+========================= */
+
+setupPattern(
+  $("authPatternCanvas"),
+  pattern=>{
+
+    authPattern=pattern;
+
+    $("authMsg").textContent =
+      pattern.length
+      ? "패턴 입력 완료"
+      : "";
+
+  }
+);
+
+
+async function beginAuth(){
+
+  if(
+    !data.passwordHash &&
+    !data.pattern.length
+  ){
+
+    return;
+
+  }
+
+
+  $("auth").classList.add("show");
+
+  authStage =
+    data.passwordHash
+    ? 0
+    : 1;
+
+  authPattern=[];
+
+  $("authPassword").value="";
+
+  $("authMsg").textContent="";
+
+
+  $("authPasswordArea")
+  .classList.toggle(
+    "hidden",
+    authStage!==0
+  );
+
+
+  $("authPatternArea")
+  .classList.toggle(
+    "hidden",
+    authStage!==1
+  );
+
+
+  clearCanvas(
+    $("authPatternCanvas")
+  );
+
+}
+
+
+$("authSubmit").onclick =
+async()=>{
+
+  if(authStage===0){
+
+    const entered =
+      await hashPassword(
+        $("authPassword").value
+      );
+
+
+    if(
+      entered !==
+      data.passwordHash
+    ){
+
+      $("authMsg").textContent =
+        "비밀번호가 틀렸습니다.";
+
+      return;
+
+    }
+
+
+    if(data.pattern.length){
+
+      authStage=1;
+
+      authPattern=[];
+
+      $("authPasswordArea")
+      .classList.add("hidden");
+
+      $("authPatternArea")
+      .classList.remove("hidden");
+
+      $("authMsg").textContent =
+        "비밀번호 확인 완료. 패턴을 입력하세요.";
+
+      return;
+
+    }
+
+  }
+
+
+  if(
+    authStage===1 &&
+    data.pattern.length
+  ){
+
+    if(
+      authPattern.join(",") !==
+      data.pattern.join(",")
+    ){
+
+      $("authMsg").textContent =
+        "패턴이 일치하지 않습니다.";
+
+      authPattern=[];
+
+      clearCanvas(
+        $("authPatternCanvas")
+      );
+
+      return;
+
+    }
+
+  }
+
+
+  $("auth")
+  .classList.remove("show");
+
+};
+
+
+$("authPassword")
+.addEventListener(
+  "keydown",
+  e=>{
+
+    if(e.key==="Enter")
+      $("authSubmit").click();
+
+  }
+);
+
+
+/* =========================
+   보안 저장
+========================= */
+
+$("saveSecurity").onclick =
+async()=>{
+
+  const password =
+    $("passwordInput").value;
+
+
+  if(password){
+
+    data.passwordHash =
+      await hashPassword(
+        password
+      );
+
+  }else{
+
+    if(data.passwordHash){
+
+      if(
+        confirm(
+          "비밀번호를 해제할까요?"
+        )
+      ){
+
+        data.passwordHash="";
+
+      }
+
+    }
+
+  }
+
+
+  save();
+
+  close("securityDialog");
+
+  updatePatternStatus();
+
+};
+
+
+/* =========================
+   초기 실행
+========================= */
+
+clearCanvas(
+  $("patternCanvas")
+);
+
+clearCanvas(
+  $("authPatternCanvas")
+);
+
+renderVideo();
+
+applyCrop();
+
+setMode("click");
+
+beginAuth();
+
+})();
+</script>
+
+</body>
+  </html>
